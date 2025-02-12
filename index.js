@@ -1,5 +1,5 @@
-import express from 'express'
 const app = express()
+const userRoutes = require('./routes/userRoutes')
 
 
 //Rota para teste
@@ -13,3 +13,4 @@ app.listen(3000, () =>{
 
 
 app.use(express.json())
+app.use('/api', userRoutes)
