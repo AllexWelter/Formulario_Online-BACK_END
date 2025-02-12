@@ -1,6 +1,7 @@
 import express from 'express'
+import connection from '../database.js'
+
 const router = express.Router()
-const connection = require('../database')
 
 //rota pra criar novo user
 router.post('/users', (req,res) => {
@@ -16,7 +17,7 @@ router.post('/users', (req,res) => {
     }
 
     //inserindo no banco
-    connection.query('INSERT INTO id_usuario (nome, email) VALUES (?, ?)', [nome, email], (err, results) => {
+    connection.query('INSERT INTO usuarios (nome, email) VALUES (?, ?)', [nome, email], (err, results) => {
         if(err) {
             return res.status(500).json({error: err.message})
         }
@@ -27,12 +28,14 @@ router.post('/users', (req,res) => {
 
 //rota para listar users
 router.get('/users', (req,res) => {
-    connection.query('SELECT * FROM id_usuario', (err, results) => {
+    connection.query('SELECT * FROM usuarios', (err, results) => {
         if (err) {
+            console.error('Erro ao buscar usuários:', err); // Log para depuração
             return res.status(500).json({error: err,message})
         }
+        console.log('Usuários encontrados:', results); // Log para depuração
         res.json(results)
     })
 })
 
-module.exports = router
+export default router

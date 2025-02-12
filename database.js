@@ -3,9 +3,9 @@ import mysql from 'mysql2'
 
 const connection = mysql.createConnection({
     host:'localhost',
+    port: 3306,
     user:'root',
     password:'allex123',
-    port: 3306,
     database:'Projeto_Final_Harve_Form'
 })
 
@@ -17,5 +17,5 @@ connection.connect((err) => {
     console.log('Conectado ao banco de dados MysQL')
 })
 
-module.exports = connection
+export default connection
 

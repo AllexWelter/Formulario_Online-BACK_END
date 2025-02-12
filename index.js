@@ -1,6 +1,7 @@
-const app = express()
-const userRoutes = require('./routes/userRoutes')
+import express from 'express'
+import userRoutes from './routes/userRoutes.js'
 
+const app = express()
 
 //Rota para teste
 app.get('/', (req,res) => {
