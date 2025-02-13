@@ -1,29 +1,13 @@
 import express from 'express'
 import connection from '../database.js'
-
+import yup from 'yup'
 const router = express.Router()
 
-//rota pra criar novo user
-router.post('/users', (req,res) => {
-    const { nome, email} = req.body
-
-    //validação manual sem yup
-    if(!nome || nome.trim() === '') {
-        return res.status(400).json({error: 'O nome é obrigatório'})
-    }
-
-    if(!email || !email.includes('@')) {
-        return res.status(400).json({error: 'E-mail inválido'})
-    }
-
-    //inserindo no banco
-    connection.query('INSERT INTO usuarios (nome, email) VALUES (?, ?)', [nome, email], (err, results) => {
-        if(err) {
-            return res.status(500).json({error: err.message})
-        }
-        res.status(201).json({id: results.insertId, nome, email})
-    })
-})
+// Esquema de validação para o usuário
+const userSchema = yup.object().shape({
+    nome: yup.string().required('O nome é obrigatório'),
+    email: yup.string().email('E-mail inválido').required('O e-mail é obrigatório')
+  });
 
 
 //rota para listar users
@@ -37,5 +21,26 @@ router.get('/users', (req,res) => {
         res.json(results)
     })
 })
+
+// Rota para criar um novo usuário
+router.post('/users', async (req, res) => {
+    try {
+      // Valida os dados de entrada
+      const validatedData = await userSchema.validate(req.body, { abortEarly: false });
+  
+      // Inserir no banco de dados
+      const { nome, email } = validatedData;
+      connection.query('INSERT INTO usuarios (nome, email) VALUES (?, ?)', [nome, email], (err, results) => {
+        if (err) {
+          return res.status(500).json({ error: err.message });
+        }
+        res.status(201).json({ id: results.insertId, nome, email });
+      });
+    } catch (err) {
+      // Captura erros de validação
+      res.status(400).json({ errors: err.errors });
+    }
+  });
+  
 
 export default router
