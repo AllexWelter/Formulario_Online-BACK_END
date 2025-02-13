@@ -1,0 +1,1 @@
+// Componente apenas para testes e rascunhos do projeto.
