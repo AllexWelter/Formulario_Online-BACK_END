@@ -2,6 +2,7 @@ import express from 'express'
 import connection from '../database.js'
 import yup from 'yup'
 const router = express.Router()
+import nodemailer from 'nodemailer'
 
 // Esquema de validação para o usuário
 const userSchema = yup.object().shape({
