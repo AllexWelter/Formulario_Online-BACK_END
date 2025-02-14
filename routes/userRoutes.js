@@ -114,13 +114,13 @@ router.post('/enviar', async (req, res) => {
 
         // Salvar na tabela usuario_quiz_respostas
         for (const resposta of respostas) {
-            await connection.promise().query('INSERT INTO usuario_quiz_respostas (id_quiz, id_alternativa) VALUES (?, ?)', [id_quiz, resposta.id_alternativa]);
+            await connection.promise().query('INSERT INTO usuarios_quiz_respostas (id_quiz, id_alternativa) VALUES (?, ?)', [id_quiz, resposta.id_alternativa]);
         }
 
         // Calcular o resultado final
         const [pontuacaoResult] = await connection.promise().query(`
             SELECT SUM(a.pontuacao) as pontuacao
-            FROM usuario_quiz_respostas uqr
+            FROM usuarios_quiz_respostas uqr
             JOIN alternativas a ON uqr.id_alternativa = a.id_alternativa
             WHERE uqr.id_quiz = ?
         `, [id_quiz]);
