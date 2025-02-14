@@ -141,8 +141,8 @@ router.post('/enviar', async (req, res) => {
 const transporter = nodemailer.createTransport({
     service: 'gmail',
     auth: {
-        user: 'seuemail@gmail.com', // Substitua pelo seu email
-        pass: 'suasenha' // Substitua pela sua senha
+        user: 'allexwelter13@gmail.com', // Substitua pelo seu email
+        pass: 'obviamente a senha não está inserida corretamente aqui' // Substitua pela sua senha
     }
 });
 
@@ -162,7 +162,7 @@ router.get('/email/:idQuiz', async (req, res) => {
 
         // Enviar email
         const mailOptions = {
-            from: 'seuemail@gmail.com', // Substitua pelo seu email
+            from: 'allexwelter13@gmail.com', // Substitua pelo seu email
             to: usuario[0].email,
             subject: 'Resultado do Quiz',
             text: `Olá ${usuario[0].nome}, sua pontuação no quiz foi ${quiz[0].pontuacao}.`
