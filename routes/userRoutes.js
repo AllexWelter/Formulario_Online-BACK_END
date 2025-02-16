@@ -58,12 +58,12 @@ router.post('/iniciar', async (req, res) => {
 });
 
 // Endpoint para buscar uma pergunta e suas alternativas
-router.get('/perguntas/:numero', async (req, res) => {
-    const { numero } = req.params;
+router.get('/perguntas/:id_quiz', async (req, res) => {
+    const { id_quiz } = req.params;
 
     try {
-        // Pesquisar pergunta por id
-        const [pergunta] = await connection.promise().query('SELECT * FROM perguntas WHERE id_pergunta = ?', [numero]);
+        // Pesquisar pergunta por id ----------- alterado pra id_quiz
+        const [pergunta] = await connection.promise().query('SELECT * FROM perguntas WHERE id_quiz = ?', [id_quiz]);
 
         if (pergunta.length === 0) {
             return res.status(404).json({ error: 'Pergunta não encontrada' });
@@ -83,6 +83,30 @@ router.get('/perguntas/:numero', async (req, res) => {
     } catch (err) {
         console.error('Erro ao buscar pergunta:', err);
         res.status(500).json({ error: 'Erro ao buscar pergunta' });
+    }
+});
+
+// Endpoint para buscar o resultado do quiz
+router.get('/quiz/resultado/:id_quiz', async (req, res) => {
+    const { id_quiz } = req.params;
+
+    try {
+        // Calculando a pontuação com base nas respostas
+        const [respostas] = await connection.promise().query('SELECT * FROM usuario_quiz_respostas WHERE id_quiz = ?', [id_quiz]);
+        let pontuacao = 0;
+        
+        // Calcular a pontuação com base nas respostas
+        for (const resposta of respostas) {
+            const [alternativaCorreta] = await connection.promise().query('SELECT * FROM alternativas WHERE id_alternativa = ?', [resposta.id_alternativa]);
+            if (alternativaCorreta[0].pontuacao) {
+                pontuacao += alternativaCorreta[0].pontuacao;
+            }
+        }
+
+        res.json({ pontuacao });
+    } catch (err) {
+        console.error('Erro ao calcular pontuação:', err);
+        res.status(500).json({ error: 'Erro ao calcular pontuação' });
     }
 });
 
