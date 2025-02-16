@@ -58,12 +58,12 @@ router.post('/iniciar', async (req, res) => {
 });
 
 // Endpoint para buscar uma pergunta e suas alternativas
-router.get('/perguntas/:id_quiz', async (req, res) => {
-    const { id_quiz } = req.params;
+router.get('/perguntas/:numero', async (req, res) => {
+    const { numero } = req.params;
 
     try {
-        // Pesquisar pergunta por id ----------- alterado pra id_quiz
-        const [pergunta] = await connection.promise().query('SELECT * FROM perguntas WHERE id_quiz = ?', [id_quiz]);
+        // Pesquisar pergunta por id
+        const [pergunta] = await connection.promise().query('SELECT * FROM perguntas WHERE id_pergunta = ?', [numero]);
 
         if (pergunta.length === 0) {
             return res.status(404).json({ error: 'Pergunta não encontrada' });
