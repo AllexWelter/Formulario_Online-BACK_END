@@ -205,5 +205,4 @@ router.get('/email/:idQuiz', async (req, res) => {
     }
 });
 
-
 export default router
