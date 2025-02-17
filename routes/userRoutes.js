@@ -91,22 +91,44 @@ router.get('/quiz/resultado/:id_quiz', async (req, res) => {
     const { id_quiz } = req.params;
 
     try {
-        // Calculando a pontuação com base nas respostas
-        const [respostas] = await connection.promise().query('SELECT * FROM usuario_quiz_respostas WHERE id_quiz = ?', [id_quiz]);
-        let pontuacao = 0;
-        
-        // Calcular a pontuação com base nas respostas
-        for (const resposta of respostas) {
-            const [alternativaCorreta] = await connection.promise().query('SELECT * FROM alternativas WHERE id_alternativa = ?', [resposta.id_alternativa]);
-            if (alternativaCorreta[0].pontuacao) {
-                pontuacao += alternativaCorreta[0].pontuacao;
-            }
+        // Primeiro, verifica se o quiz existe
+        const [quiz] = await connection.promise().query(
+            'SELECT pontuacao FROM usuario_quiz WHERE id_quiz = ?', 
+            [id_quiz]
+        );
+
+        if (quiz.length === 0) {
+            return res.status(404).json({ error: 'Quiz não encontrado' });
         }
 
-        res.json({ pontuacao });
+        // Se o quiz ainda não foi finalizado (pontuação = 0), calcula a pontuação
+        if (quiz[0].pontuacao === 0) {
+            // Busca todas as respostas do usuário
+            const [respostas] = await connection.promise().query(
+                'SELECT uqr.id_alternativa, alt.pontuacao ' +
+                'FROM usuarios_quiz_respostas uqr ' +
+                'JOIN alternativas alt ON uqr.id_alternativa = alt.id_alternativa ' +
+                'WHERE uqr.id_quiz = ?',
+                [id_quiz]
+            );
+
+            // Calcula a pontuação total
+            const pontuacao = respostas.reduce((total, resp) => total + (resp.pontuacao || 0), 0);
+
+            // Atualiza a pontuação no quiz
+            await connection.promise().query(
+                'UPDATE usuario_quiz SET pontuacao = ? WHERE id_quiz = ?',
+                [pontuacao, id_quiz]
+            );
+
+            return res.json({ pontuacao });
+        }
+
+        // Se já tem pontuação, retorna ela
+        res.json({ pontuacao: quiz[0].pontuacao });
     } catch (err) {
         console.error('Erro ao calcular pontuação:', err);
-        res.status(500).json({ error: 'Erro ao calcular pontuação' });
+        res.status(500).json({ error: 'Erro ao calcular pontuação', details: err.message });
     }
 });
 
