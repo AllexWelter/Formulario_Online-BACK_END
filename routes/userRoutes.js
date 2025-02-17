@@ -187,8 +187,17 @@ router.post('/enviar', async (req, res) => {
 const transporter = nodemailer.createTransport({
     service: 'gmail',
     auth: {
-        user: 'allexwelter13@gmail.com', // Substitua pelo seu email
-        pass: 'obviamente a senha não está inserida corretamente aqui' // Substitua pela sua senha
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_APP_PASSWORD
+    }
+});
+
+// Verificar a configuração do email ao iniciar o servidor
+transporter.verify(function (error, success) {
+    if (error) {
+        console.error('Erro na configuração do email:', error);
+    } else {
+        console.log('Servidor de email pronto para enviar mensagens');
     }
 });
 
@@ -197,33 +206,87 @@ router.get('/email/:idQuiz', async (req, res) => {
     const { idQuiz } = req.params;
 
     try {
-        // Verificar se o quiz existe
-        const [quiz] = await connection.promise().query('SELECT * FROM usuario_quiz WHERE id_quiz = ?', [idQuiz]);
+        // Buscar informações do quiz e usuário
+        const [quizResults] = await connection.promise().query(`
+            SELECT 
+                uq.id_quiz,
+                uq.pontuacao,
+                u.nome,
+                u.email,
+                (SELECT COUNT(*) FROM usuarios_quiz_respostas WHERE id_quiz = uq.id_quiz) as total_respostas,
+                (SELECT COUNT(*) FROM perguntas) as total_perguntas
+            FROM usuario_quiz uq
+            JOIN usuarios u ON u.id_usuario = uq.id_usuario
+            WHERE uq.id_quiz = ?
+        `, [idQuiz]);
 
-        if (quiz.length === 0) {
+        if (quizResults.length === 0) {
             return res.status(404).json({ error: 'Quiz não encontrado' });
         }
 
-        const [usuario] = await connection.promise().query('SELECT * FROM usuarios WHERE id_usuario = ?', [quiz[0].id_usuario]);
+        const quizInfo = quizResults[0];
 
-        // Enviar email
+        // Template do email
+        const emailHtml = `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                <h2 style="color: #2c3e50;">Olá ${quizInfo.nome}!</h2>
+                
+                <div style="background-color: #f8f9fa; padding: 20px; border-radius: 5px; margin: 20px 0;">
+                    <h3 style="color: #2c3e50;">Resultado do seu Quiz</h3>
+                    <p style="font-size: 18px;">Sua pontuação final foi: <strong style="color: #007bff;">${quizInfo.pontuacao} pontos</strong></p>
+                    <p>Você respondeu ${quizInfo.total_respostas} de ${quizInfo.total_perguntas} perguntas.</p>
+                </div>
+                
+                <p>Obrigado por participar do nosso quiz! Esperamos que tenha se divertido e aprendido algo novo.</p>
+                
+                <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
+                    <p style="color: #666;">Atenciosamente,</p>
+                    <p style="color: #666;">Equipe do Quiz</p>
+                </div>
+            </div>
+        `;
+
+        // Configuração do email
         const mailOptions = {
-            from: 'allexwelter13@gmail.com', // Substitua pelo seu email
-            to: usuario[0].email,
-            subject: 'Resultado do Quiz',
-            text: `Olá ${usuario[0].nome}, sua pontuação no quiz foi ${quiz[0].pontuacao}.`
+            from: {
+                name: 'Quiz App',
+                address: process.env.EMAIL_USER
+            },
+            to: quizInfo.email,
+            subject: 'Resultado do seu Quiz! 🎯',
+            html: emailHtml
         };
 
-        transporter.sendMail(mailOptions, (error, info) => {
-            if (error) {
-                console.error('Erro ao enviar email:', error);
-                return res.status(500).json({ error: 'Erro ao enviar email' });
-            }
-            res.json({ message: 'Email enviado com sucesso' });
+        // Enviar email
+        await new Promise((resolve, reject) => {
+            transporter.sendMail(mailOptions, (error, info) => {
+                if (error) {
+                    console.error('Erro no envio do email:', error);
+                    reject(error);
+                } else {
+                    console.log('Email enviado:', info.response);
+                    resolve(info);
+                }
+            });
         });
+
+        // Atualizar o status de envio no banco (opcional)
+        await connection.promise().query(
+            'UPDATE usuario_quiz SET email_enviado = TRUE WHERE id_quiz = ?',
+            [idQuiz]
+        );
+
+        res.json({ 
+            message: 'Email enviado com sucesso',
+            sentTo: quizInfo.email
+        });
+
     } catch (err) {
         console.error('Erro ao enviar email:', err);
-        res.status(500).json({ error: 'Erro ao enviar email' });
+        res.status(500).json({ 
+            error: 'Erro ao enviar email',
+            details: process.env.NODE_ENV === 'development' ? err.message : undefined
+        });
     }
 });
 
