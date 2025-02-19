@@ -6,6 +6,10 @@ import dotenv from 'dotenv'
 
 dotenv.config();
 
+// Log para verificar as variáveis de ambiente (temporário)
+console.log('Email user:', process.env.EMAIL_USER)
+console.log('Email pass:', process.env.EMAIL_APP_PASSWORD)
+
 const app = express()
 
 app.use(cors())

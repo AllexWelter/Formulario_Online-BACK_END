@@ -10,15 +10,14 @@ const userSchema = yup.object().shape({
     email: yup.string().email('E-mail inválido').required('O e-mail é obrigatório')
 });
 
-
 //rota para listar users
 router.get('/users', (req, res) => {
     connection.query('SELECT * FROM usuarios', (err, results) => {
         if (err) {
-            console.error('Erro ao buscar usuários:', err); // Log para depuração
+            console.error('Erro ao buscar usuários:', err);
             return res.status(500).json({ error: err.message })
         }
-        console.log('Usuários encontrados:', results); // Log para depuração
+        console.log('Usuários encontrados:', results);
         res.json(results)
     })
 })
@@ -44,7 +43,7 @@ router.post('/iniciar', async (req, res) => {
         }
 
         // Criar registro na tabela usuario_quiz
-        const [quizResult] = await connection.promise().query('INSERT INTO usuario_quiz (id_usuario, data_inicio, data_termino, pontuacao) VALUES (?, NOW(),NULL, 0)', [userId]);
+        const [quizResult] = await connection.promise().query('INSERT INTO usuario_quiz (id_usuario, data_inicio, data_termino, pontuacao) VALUES (?, NOW(), NULL, 0)', [userId]);
         const quizId = quizResult.insertId;
 
         res.status(201).json({ id_quiz: quizId });
@@ -91,7 +90,6 @@ router.get('/quiz/resultado/:id_quiz', async (req, res) => {
     const { id_quiz } = req.params;
 
     try {
-        // Primeiro, verifica se o quiz existe
         const [quiz] = await connection.promise().query(
             'SELECT pontuacao FROM usuario_quiz WHERE id_quiz = ?', 
             [id_quiz]
@@ -101,9 +99,7 @@ router.get('/quiz/resultado/:id_quiz', async (req, res) => {
             return res.status(404).json({ error: 'Quiz não encontrado' });
         }
 
-        // Se o quiz ainda não foi finalizado (pontuação = 0), calcula a pontuação
         if (quiz[0].pontuacao === 0) {
-            // Busca todas as respostas do usuário
             const [respostas] = await connection.promise().query(
                 'SELECT uqr.id_alternativa, alt.pontuacao ' +
                 'FROM usuarios_quiz_respostas uqr ' +
@@ -112,10 +108,8 @@ router.get('/quiz/resultado/:id_quiz', async (req, res) => {
                 [id_quiz]
             );
 
-            // Calcula a pontuação total
             const pontuacao = respostas.reduce((total, resp) => total + (resp.pontuacao || 0), 0);
 
-            // Atualiza a pontuação no quiz
             await connection.promise().query(
                 'UPDATE usuario_quiz SET pontuacao = ? WHERE id_quiz = ?',
                 [pontuacao, id_quiz]
@@ -124,7 +118,6 @@ router.get('/quiz/resultado/:id_quiz', async (req, res) => {
             return res.json({ pontuacao });
         }
 
-        // Se já tem pontuação, retorna ela
         res.json({ pontuacao: quiz[0].pontuacao });
     } catch (err) {
         console.error('Erro ao calcular pontuação:', err);
@@ -137,7 +130,6 @@ router.post('/enviar', async (req, res) => {
     const { id_quiz, respostas } = req.body;
 
     try {
-        // Verificar se todas as perguntas foram respondidas
         const [perguntas] = await connection.promise().query('SELECT id_pergunta FROM perguntas');
         const perguntasIds = perguntas.map(p => p.id_pergunta);
 
@@ -148,7 +140,6 @@ router.post('/enviar', async (req, res) => {
             return res.status(400).json({ error: 'Todas as perguntas devem ser respondidas' });
         }
 
-        // Verificar se apenas uma alternativa foi selecionada por pergunta
         for (const resposta of respostas) {
             const [alternativas] = await connection.promise().query('SELECT id_alternativa FROM alternativas WHERE id_pergunta = ?', [resposta.id_pergunta]);
             const alternativasIds = alternativas.map(a => a.id_alternativa);
@@ -158,12 +149,10 @@ router.post('/enviar', async (req, res) => {
             }
         }
 
-        // Salvar na tabela usuario_quiz_respostas
         for (const resposta of respostas) {
             await connection.promise().query('INSERT INTO usuarios_quiz_respostas (id_quiz, id_alternativa) VALUES (?, ?)', [id_quiz, resposta.id_alternativa]);
         }
 
-        // Calcular o resultado final
         const [pontuacaoResult] = await connection.promise().query(`
             SELECT SUM(a.pontuacao) as pontuacao
             FROM usuarios_quiz_respostas uqr
@@ -173,7 +162,6 @@ router.post('/enviar', async (req, res) => {
 
         const pontuacao = pontuacaoResult[0].pontuacao || 0;
 
-        // Atualizar a tabela usuario_quiz com a data de término e pontuação
         await connection.promise().query('UPDATE usuario_quiz SET data_termino = NOW(), pontuacao = ? WHERE id_quiz = ?', [pontuacao, id_quiz]);
 
         res.json({ pontuacao });
@@ -185,32 +173,66 @@ router.post('/enviar', async (req, res) => {
 
 // Configuração do nodemailer para enviar emails
 const transporter = nodemailer.createTransport({
-    service: 'gmail',
+    host: 'smtp.gmail.com',
+    port: 465,
+    secure: true,
     auth: {
+        type: 'login',
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_APP_PASSWORD
+    },
+    logger: true,
+    debug: true
+});
+
+// Verificação do transporter com mais detalhes de debug
+transporter.verify(function (error, success) {
+    if (error) {
+        console.error('Erro na verificação do email:', {
+            error: error.message,
+            code: error.code,
+            response: error.response,
+            responseCode: error.responseCode,
+            command: error.command
+        });
+    } else {
+        console.log('Configuração de email verificada com sucesso!');
     }
 });
 
-// Verificar a configuração do email ao iniciar o servidor
-transporter.verify(function (error, success) {
-    if (error) {
-        console.error('Erro na configuração do email:', error);
-    } else {
-        console.log('Servidor de email pronto para enviar mensagens');
+// Teste de envio de email
+const testEmail = async () => {
+    try {
+        const info = await transporter.sendMail({
+            from: `"Quiz App" <${process.env.EMAIL_USER}>`,
+            to: process.env.EMAIL_USER,
+            subject: "Teste de Configuração ✔",
+            text: "Se você recebeu este email, a configuração está funcionando!",
+            html: "<b>Se você recebeu este email, a configuração está funcionando!</b>"
+        });
+        console.log('Email de teste enviado:', info.messageId);
+    } catch (error) {
+        console.error('Erro no envio do email de teste:', error);
     }
-});
+};
+
+// Executar teste de email ao iniciar
+testEmail();
 
 // Endpoint para enviar email com o resultado do quiz
 router.get('/email/:idQuiz', async (req, res) => {
     const { idQuiz } = req.params;
 
     try {
+        console.log('Iniciando envio de email para quiz:', idQuiz);
+
         // Buscar informações do quiz e usuário
         const [quizResults] = await connection.promise().query(`
             SELECT 
                 uq.id_quiz,
                 uq.pontuacao,
+                uq.data_inicio,
+                uq.data_termino,
                 u.nome,
                 u.email,
                 (SELECT COUNT(*) FROM usuarios_quiz_respostas WHERE id_quiz = uq.id_quiz) as total_respostas,
@@ -225,26 +247,37 @@ router.get('/email/:idQuiz', async (req, res) => {
         }
 
         const quizInfo = quizResults[0];
+        const percentualAcerto = ((quizInfo.pontuacao / quizInfo.total_perguntas) * 100).toFixed(1);
 
         // Template do email
         const emailHtml = `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                <h2 style="color: #2c3e50;">Olá ${quizInfo.nome}!</h2>
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+                <h2 style="color: #2c3e50; text-align: center;">Resultado do Quiz</h2>
                 
                 <div style="background-color: #f8f9fa; padding: 20px; border-radius: 5px; margin: 20px 0;">
-                    <h3 style="color: #2c3e50;">Resultado do seu Quiz</h3>
-                    <p style="font-size: 18px;">Sua pontuação final foi: <strong style="color: #007bff;">${quizInfo.pontuacao} pontos</strong></p>
-                    <p>Você respondeu ${quizInfo.total_respostas} de ${quizInfo.total_perguntas} perguntas.</p>
+                    <h3 style="color: #2c3e50;">Olá ${quizInfo.nome}!</h3>
+                    
+                    <div style="background-color: white; padding: 15px; border-radius: 5px; margin-top: 20px;">
+                        <h4 style="color: #007bff; margin: 0;">Resumo do seu desempenho:</h4>
+                        <ul style="list-style: none; padding: 0;">
+                            <li style="margin: 10px 0;">📊 Pontuação final: <strong>${quizInfo.pontuacao} pontos</strong></li>
+                            <li style="margin: 10px 0;">✨ Percentual de acerto: <strong>${percentualAcerto}%</strong></li>
+                            <li style="margin: 10px 0;">❓ Questões respondidas: <strong>${quizInfo.total_respostas}/${quizInfo.total_perguntas}</strong></li>
+                        </ul>
+                    </div>
                 </div>
                 
-                <p>Obrigado por participar do nosso quiz! Esperamos que tenha se divertido e aprendido algo novo.</p>
+                <p style="color: #666; text-align: center;">
+                    Obrigado por participar do nosso quiz! Esperamos que tenha se divertido e aprendido algo novo.
+                </p>
                 
-                <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
-                    <p style="color: #666;">Atenciosamente,</p>
-                    <p style="color: #666;">Equipe do Quiz</p>
+                <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; text-align: center;">
+                    <p style="color: #666;">Atenciosamente,<br>Equipe do Quiz</p>
                 </div>
             </div>
         `;
+
+        console.log('Tentando enviar email para:', quizInfo.email);
 
         // Configuração do email
         const mailOptions = {
@@ -253,24 +286,15 @@ router.get('/email/:idQuiz', async (req, res) => {
                 address: process.env.EMAIL_USER
             },
             to: quizInfo.email,
-            subject: 'Resultado do seu Quiz! 🎯',
+            subject: `Resultado do seu Quiz: ${percentualAcerto}% de acerto! 🎯`,
             html: emailHtml
         };
 
         // Enviar email
-        await new Promise((resolve, reject) => {
-            transporter.sendMail(mailOptions, (error, info) => {
-                if (error) {
-                    console.error('Erro no envio do email:', error);
-                    reject(error);
-                } else {
-                    console.log('Email enviado:', info.response);
-                    resolve(info);
-                }
-            });
-        });
+        const info = await transporter.sendMail(mailOptions);
+        console.log('Email enviado com sucesso:', info.messageId);
 
-        // Atualizar o status de envio no banco (opcional)
+        // Atualizar status no banco
         await connection.promise().query(
             'UPDATE usuario_quiz SET email_enviado = TRUE WHERE id_quiz = ?',
             [idQuiz]
@@ -278,16 +302,24 @@ router.get('/email/:idQuiz', async (req, res) => {
 
         res.json({ 
             message: 'Email enviado com sucesso',
-            sentTo: quizInfo.email
+            sentTo: quizInfo.email,
+            messageId: info.messageId
         });
 
     } catch (err) {
-        console.error('Erro ao enviar email:', err);
+        console.error('Erro detalhado ao enviar email:', {
+            message: err.message,
+            code: err.code,
+            command: err.command,
+            response: err.response
+        });
+        
         res.status(500).json({ 
             error: 'Erro ao enviar email',
-            details: process.env.NODE_ENV === 'development' ? err.message : undefined
+            details: err.message,
+            code: err.code
         });
     }
 });
 
-export default router
+export default router;
