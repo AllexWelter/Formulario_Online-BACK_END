@@ -1,14 +1,47 @@
-import express from 'express'
-import connection from '../database.js'
-import yup from 'yup'
-const router = express.Router()
-import nodemailer from 'nodemailer'
+import express from 'express';
+import connection from '../database.js';
+import yup from 'yup';
+import nodemailer from 'nodemailer';
+import dotenv from 'dotenv';
+
+// Carregar variáveis de ambiente
+dotenv.config();
+
+const router = express.Router();
 
 // Esquema de validação para o usuário
 const userSchema = yup.object().shape({
     nome: yup.string().required('O nome é obrigatório'),
     email: yup.string().email('E-mail inválido').required('O e-mail é obrigatório')
 });
+
+// Configuração do nodemailer para enviar emails
+const transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_APP_PASSWORD
+    }
+});
+
+// Função para verificar a configuração do email
+const verificarConfigEmail = async () => {
+    try {
+        await transporter.verify();
+        console.log('Configuração de email verificada com sucesso!');
+        return true;
+    } catch (error) {
+        console.error('Erro na verificação do email:', {
+            message: error.message,
+            code: error.code,
+            response: error.response
+        });
+        return false;
+    }
+};
+
+// Verificar configuração ao iniciar
+verificarConfigEmail();
 
 //rota para listar users
 router.get('/users', (req, res) => {
@@ -171,60 +204,15 @@ router.post('/enviar', async (req, res) => {
     }
 });
 
-// Configuração do nodemailer para enviar emails
-const transporter = nodemailer.createTransport({
-    host: 'smtp.gmail.com',
-    port: 465,
-    secure: true,
-    auth: {
-        type: 'login',
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_APP_PASSWORD
-    },
-    logger: true,
-    debug: true
-});
-
-// Verificação do transporter com mais detalhes de debug
-transporter.verify(function (error, success) {
-    if (error) {
-        console.error('Erro na verificação do email:', {
-            error: error.message,
-            code: error.code,
-            response: error.response,
-            responseCode: error.responseCode,
-            command: error.command
-        });
-    } else {
-        console.log('Configuração de email verificada com sucesso!');
-    }
-});
-
-// Teste de envio de email
-const testEmail = async () => {
-    try {
-        const info = await transporter.sendMail({
-            from: `"Quiz App" <${process.env.EMAIL_USER}>`,
-            to: process.env.EMAIL_USER,
-            subject: "Teste de Configuração ✔",
-            text: "Se você recebeu este email, a configuração está funcionando!",
-            html: "<b>Se você recebeu este email, a configuração está funcionando!</b>"
-        });
-        console.log('Email de teste enviado:', info.messageId);
-    } catch (error) {
-        console.error('Erro no envio do email de teste:', error);
-    }
-};
-
-// Executar teste de email ao iniciar
-testEmail();
-
 // Endpoint para enviar email com o resultado do quiz
 router.get('/email/:idQuiz', async (req, res) => {
     const { idQuiz } = req.params;
 
     try {
-        console.log('Iniciando envio de email para quiz:', idQuiz);
+        // Verificar se o transporter está configurado
+        if (!await verificarConfigEmail()) {
+            throw new Error('Configuração de email não está funcionando');
+        }
 
         // Buscar informações do quiz e usuário
         const [quizResults] = await connection.promise().query(`
@@ -277,8 +265,6 @@ router.get('/email/:idQuiz', async (req, res) => {
             </div>
         `;
 
-        console.log('Tentando enviar email para:', quizInfo.email);
-
         // Configuração do email
         const mailOptions = {
             from: {
@@ -301,13 +287,13 @@ router.get('/email/:idQuiz', async (req, res) => {
         );
 
         res.json({ 
+            success: true,
             message: 'Email enviado com sucesso',
-            sentTo: quizInfo.email,
             messageId: info.messageId
         });
 
     } catch (err) {
-        console.error('Erro detalhado ao enviar email:', {
+        console.error('Erro ao enviar email:', {
             message: err.message,
             code: err.code,
             command: err.command,
@@ -315,9 +301,9 @@ router.get('/email/:idQuiz', async (req, res) => {
         });
         
         res.status(500).json({ 
+            success: false,
             error: 'Erro ao enviar email',
-            details: err.message,
-            code: err.code
+            details: err.message
         });
     }
 });
