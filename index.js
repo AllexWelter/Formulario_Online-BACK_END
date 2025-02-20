@@ -3,7 +3,6 @@ import userRoutes from './routes/userRoutes.js'
 import cors from 'cors'
 import dotenv from 'dotenv'
 
-
 dotenv.config();
 
 // Log para verificar as variáveis de ambiente (temporário)
